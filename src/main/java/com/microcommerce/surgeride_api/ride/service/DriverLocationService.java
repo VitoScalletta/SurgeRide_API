@@ -34,7 +34,7 @@ public class DriverLocationService {
         log.info("Driver {} location updated", driverId);
     }
 
-    public List<String> getNearbyDrivers(double longitude, double latitude,double radiusInKm){
+    public List<String> getNearbyDrivers(double latitude, double longitude,double radiusInKm){
         Point riderLocation = new Point(longitude, latitude);
         Distance distance = new Distance(radiusInKm, Metrics.KILOMETERS);
         Circle searchArea = new Circle(riderLocation, distance);

@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/locations")
 @RequiredArgsConstructor
@@ -17,5 +19,15 @@ public class LocationController {
     public ResponseEntity<String> updateLocation(@RequestBody LocationUpdateRequest request) {
         driverLocationService.updateLocation(request);
         return ResponseEntity.ok("Driver location updated");
+    }
+
+    @GetMapping("/nearby")
+    public ResponseEntity<List<String>> getNearbyLocations(
+            @RequestParam double latitude,
+            @RequestParam double longitude,
+            @RequestParam double radius)
+    {
+        List<String> nearbyDrivers =driverLocationService.getNearbyDrivers(latitude, longitude, radius);
+        return ResponseEntity.ok(nearbyDrivers);
     }
 }
