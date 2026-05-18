@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.geo.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.data.geo.Circle;
 import org.springframework.data.geo.Distance;
@@ -15,6 +16,7 @@ import org.springframework.data.geo.Point;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @AllArgsConstructor
@@ -49,5 +51,20 @@ public class DriverLocationService {
                 .map(geoResult -> geoResult.getContent().getName()).toList();
     }
 
+    @Scheduled(fixedRate = 60000)
+    public void removeInactiveDrivers(){
+        long oneMinuteAgo = System.currentTimeMillis() - 60000;
+
+        Set<String> inactiveDrivers = stringRedisTemplate.opsForZSet()
+                .rangeByScore("driver_last_Seen",0,oneMinuteAgo);
+
+        if(inactiveDrivers != null && !inactiveDrivers.isEmpty()){
+            for(String driverId : inactiveDrivers){
+                stringRedisTemplate.opsForGeo().remove("driver_last_seen",driverId);
+                stringRedisTemplate.opsForZSet().remove("driver_last_Seen",driverId);
+                log.info("Uzun süredir aktif olmayan sürücüler silindi Sürücü id : "+ driverId);
+            }
+        }
+    }
 
 }
