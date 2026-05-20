@@ -23,6 +23,7 @@ import java.util.Set;
 @Slf4j
 public class DriverLocationService {
     private final StringRedisTemplate stringRedisTemplate;
+    private final SurgePricingService surgePricingService;
 
     public void updateLocation(LocationUpdateRequest request){
         Point location = new Point(request.getLongitude(), request.getLatitude());
@@ -34,6 +35,7 @@ public class DriverLocationService {
         );
         stringRedisTemplate.opsForZSet().add("driver_last_Seen",driverId,System.currentTimeMillis());
         log.info("Driver {} location updated", driverId);
+        surgePricingService.recordSupply(request.getDriverId(),request.getLatitude(), request.getLongitude());
     }
 
     public List<String> getNearbyDrivers(double latitude, double longitude,double radiusInKm){
@@ -56,12 +58,12 @@ public class DriverLocationService {
         long oneMinuteAgo = System.currentTimeMillis() - 60000;
 
         Set<String> inactiveDrivers = stringRedisTemplate.opsForZSet()
-                .rangeByScore("driver_last_Seen",0,oneMinuteAgo);
+                .rangeByScore("driver_locations",0,oneMinuteAgo);
 
         if(inactiveDrivers != null && !inactiveDrivers.isEmpty()){
             for(String driverId : inactiveDrivers){
-                stringRedisTemplate.opsForGeo().remove("driver_last_seen",driverId);
-                stringRedisTemplate.opsForZSet().remove("driver_last_Seen",driverId);
+                stringRedisTemplate.opsForGeo().remove("driver_locations",driverId);
+                stringRedisTemplate.opsForZSet().remove("driver_locations",driverId);
                 log.info("Uzun süredir aktif olmayan sürücüler silindi Sürücü id : "+ driverId);
             }
         }
