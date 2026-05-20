@@ -30,6 +30,15 @@ public class SurgePricingService {
     }
 
     public double calculateSurgeMultiplier(String zoneId){
-        Double fiveMinutesAgo = System.currentTimeMillis()-300000;
+        String demandKey = "surge:demand:" + zoneId;
+        String supplyKey = "surge:supply:" + zoneId;
+
+        long now = System.currentTimeMillis();
+        long fiveMinutesAgo = now - 300000;
+
+        stringRedisTemplate.opsForZSet().removeRangeByScore(demandKey,0,fiveMinutesAgo);
+        stringRedisTemplate.opsForZSet().removeRangeByScore(supplyKey,0,fiveMinutesAgo);
+        Long demandCount = stringRedisTemplate.opsForZSet().zCard(demandKey);
+        Long supplyCount = stringRedisTemplate.opsForZSet().zCard(supplyKey);
     }
 }
