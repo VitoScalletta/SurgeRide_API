@@ -1,11 +1,16 @@
 package com.microcommerce.surgeride_api.ride.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SurgePricingService {
     private final StringRedisTemplate stringRedisTemplate;
     private final SurgeZoneService surgeZoneService;
@@ -19,6 +24,8 @@ public class SurgePricingService {
                 String.valueOf(riderId),
                 System.currentTimeMillis()
         );
+
+        stringRedisTemplate.opsForSet().add("surge:active_zones",zoneId);
     }
 
     public void recordSupply(Long driverId,double latitude,double longitude) {
@@ -29,6 +36,7 @@ public class SurgePricingService {
                 String.valueOf(driverId),
                 System.currentTimeMillis()
         );
+        stringRedisTemplate.opsForSet().add("surge:active_zones",zoneId);
     }
 
     public double calculateSurgeMultiplier(String zoneId){
@@ -42,16 +50,19 @@ public class SurgePricingService {
         stringRedisTemplate.opsForZSet().removeRangeByScore(supplyKey,0,fiveMinutesAgo);
         Long demandCount = stringRedisTemplate.opsForZSet().zCard(demandKey);
         Long supplyCount = stringRedisTemplate.opsForZSet().zCard(supplyKey);
-        if(demandCount == null || supplyCount == null){
+        if(demandCount == null){
+            return 0L;
+        }
+        if(supplyCount == null){
             return 0L;
         }
         if (demandCount == 0) {
-            return 1L;
+            return 1.0;
         }
         if (supplyCount == 0) {
-            return 2L;
+            return 2.0;
         }
-        double ratio = demandCount / supplyCount;
+        double ratio = (double) demandCount / supplyCount;
 
         if (ratio <= 1){
             return 1.0;
@@ -65,5 +76,34 @@ public class SurgePricingService {
         else{
             return 2.0;
         }
+    }
+
+    @Scheduled(fixedRate = 10000)
+    public void updateAllZoneSurge(){
+        Set<String> activeZones = stringRedisTemplate.opsForSet().members("surge:active_zones");
+
+        if(activeZones == null|| activeZones.isEmpty()){
+            return;
+        }
+        for (String zoneId : activeZones) {
+            double multiplier = calculateSurgeMultiplier(zoneId);
+            String multiplierKey = "surge:multiplier:" + zoneId;
+            stringRedisTemplate.opsForValue().set(multiplierKey,String.valueOf(multiplier));
+
+            log.info("Bölge {} için dinamik fiyat çarpanı güncellendi: {}x",zoneId,multiplier);
+        }
+    }
+
+    public double estimatePrice(double starlat, double starlon, double distanceInKm) {
+        String zoneId = surgeZoneService.getZoneId(starlat,starlon);
+        String multiplierStr = stringRedisTemplate.opsForValue().get("surge:multiplier:" + zoneId);
+
+        double multiplier = 1.0;
+        if (multiplierStr != null) {
+            multiplier = Double.parseDouble(multiplierStr);
+        }
+
+        double basePrice = 60.0 +(distanceInKm*20.0);
+        return basePrice * multiplier;
     }
 }
