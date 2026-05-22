@@ -51,7 +51,7 @@ public class RideService {
 
         try{
             User rider = userRepository.findById(requestDto.getRiderId()).orElseThrow(() -> new RuntimeException("Yolcu Bulunamadı!"));
-            User driver = userRepository.findById(requestDto.getRiderId()).orElseThrow(() -> new RuntimeException("Sürücü bulunamadı!"));
+            User driver = userRepository.findById(Long.parseLong(selectedDriverId)).orElseThrow(() -> new RuntimeException("Sürücü bulunamadı!"));
 
             double basePriceDouble = 60.0 + (requestDto.getDistanceInKm() * 20.0);
             double endPriceDouble = basePriceDouble + liveMultiplier;
@@ -74,7 +74,7 @@ public class RideService {
             if(!isAcquired){
                 return "Araç başka bir yolcuyla eşleşti lütfen tekrar deneyiniz";
             }
-            stringRedisTemplate.opsForGeo().remove("driver_locations" + selectedDriverId);
+            stringRedisTemplate.opsForGeo().remove("driver_locations" , selectedDriverId);
             return "Tebrikler! Sürücü : "+selectedDriverId+"sizinle eşleşti.Araç yola çıktı";
         }catch (InterruptedException exception){
             Thread.currentThread().interrupt();
