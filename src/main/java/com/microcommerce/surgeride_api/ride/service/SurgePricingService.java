@@ -51,10 +51,10 @@ public class SurgePricingService {
         Long demandCount = stringRedisTemplate.opsForZSet().zCard(demandKey);
         Long supplyCount = stringRedisTemplate.opsForZSet().zCard(supplyKey);
         if(demandCount == null){
-            return 0L;
+            demandCount = 0L;
         }
         if(supplyCount == null){
-            return 0L;
+            supplyCount = 0L;
         }
         if (demandCount == 0) {
             return 1.0;
