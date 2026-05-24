@@ -9,6 +9,7 @@ import com.microcommerce.surgeride_api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,8 @@ public class RideService {
     private final DriverLocationService driverLocationService;
     private final RideRepository rideRepository;
     private final UserRepository userRepository;
+    private final RabbitTemplate rabbitTemplate;
+
     public String requestRide(RideRequestDto requestDto){
         String zoneId = surgeZoneService.getZoneId(requestDto.getStartLatitude(), requestDto.getStartLongitude());
         String multiplierStr = stringRedisTemplate.opsForValue().get("surge:multiplier:" + zoneId);
