@@ -40,7 +40,7 @@ public class RideService {
         }
         rabbitTemplate.convertAndSend(
                 com.microcommerce.surgeride_api.Common.Config.RabbitMQConfig.EXCHANGE_NAME,
-                "ride.request.new",
+                "ride_request.new",
                 requestDto
         );
 

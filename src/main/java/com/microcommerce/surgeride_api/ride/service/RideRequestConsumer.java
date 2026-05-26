@@ -47,7 +47,7 @@ public class RideRequestConsumer {
 
         try{
             User rider = userRepository.findById(rideRequestDto.getRiderId()).orElseThrow(() -> new RuntimeException("Rider not found"));
-            User driver = userRepository.findById(rideRequestDto.getDriverId()).orElseThrow(() -> new RuntimeException("Driver not found"));
+            User driver = userRepository.findById(Long.parseLong(selectedDriverId)).orElseThrow(() -> new RuntimeException("Driver not found"));
 
             double basePriceDouble = 60.0 + (rideRequestDto.getDistanceInKm()*20.0);
             double endPriceDouble = basePriceDouble * rideRequestDto.getAcceptedMultiplier();
@@ -72,11 +72,11 @@ public class RideRequestConsumer {
                 log.warn("Sürücü başka bir yolcuyla eşleşti Yolcu ID : {}", rideRequestDto.getRiderId());
                 return;
             }
-            stringRedisTemplate.opsForGeo().remove("driver_locations" + selectedDriverId);
+            stringRedisTemplate.opsForGeo().remove("driver_locations", selectedDriverId);
             log.info("Tebrikler! Sürücü : {} yolcu : {} ile eşleşti Araç yola çıktı",selectedDriverId,rideRequestDto.getRiderId());
-        }catch (InterruptedException exception){
+        }catch (Exception exception){
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Sistem hatası :"+exception.getMessage());
+            log.error("Kuyruktaki mesaj işlenirken KRİTİK HATA oluştu. Mesaj çöpe atılıyor. Hata: {}", exception.getMessage(), exception);
         }finally {
             if (rlock.isHeldByCurrentThread()) {
                 rlock.unlock();
