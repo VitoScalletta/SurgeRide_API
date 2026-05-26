@@ -7,6 +7,7 @@ import lombok.Setter;
 @Setter
 public class RideRequestDto {
     Long riderId;
+    Long driverId;
     double startLatitude;
     double startLongitude;
     double endLatitude;

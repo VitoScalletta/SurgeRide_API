@@ -22,10 +22,6 @@ import java.util.concurrent.TimeUnit;
 public class RideService {
     private final SurgeZoneService surgeZoneService;
     private final StringRedisTemplate stringRedisTemplate;
-    private final RedissonClient redissonClient;
-    private final DriverLocationService driverLocationService;
-    private final RideRepository rideRepository;
-    private final UserRepository userRepository;
     private final RabbitTemplate rabbitTemplate;
 
     public String requestRide(RideRequestDto requestDto){
@@ -38,56 +34,19 @@ public class RideService {
             liveMultiplier = Double.parseDouble(multiplierStr);
         }
         double differenceBetweenMultipliers = Math.abs(liveMultiplier - requestDto.getAcceptedMultiplier());
-        if (differenceBetweenMultipliers > 0.01) {
+
+        if(differenceBetweenMultipliers > 0.01){
             throw new RuntimeException("Bölgenizdeki fiyatlar güncellendi! Lütfen tekrar deneyiniz");
         }
-        List<String> nearbyDrivers = driverLocationService.getNearbyDrivers(
-                requestDto.getStartLatitude(),
-                requestDto.getStartLongitude(),
-                5.0);
+        rabbitTemplate.convertAndSend(
+                com.microcommerce.surgeride_api.Common.Config.RabbitMQConfig.EXCHANGE_NAME,
+                "ride.request.new",
+                requestDto
+        );
 
-        if (nearbyDrivers.isEmpty()) {
-            return "Bölgenizde uygun araç bulunamadı";
-        }
-        String selectedDriverId = nearbyDrivers.get(0);
-        RLock rlock = redissonClient.getLock("driver:lock:" + selectedDriverId);
-
-        try{
-            User rider = userRepository.findById(requestDto.getRiderId()).orElseThrow(() -> new RuntimeException("Yolcu Bulunamadı!"));
-            User driver = userRepository.findById(Long.parseLong(selectedDriverId)).orElseThrow(() -> new RuntimeException("Sürücü bulunamadı!"));
-
-            double basePriceDouble = 60.0 + (requestDto.getDistanceInKm() * 20.0);
-            double endPriceDouble = basePriceDouble + liveMultiplier;
-            String startLoc = requestDto.getStartLatitude() + "," + requestDto.getStartLongitude();
-            String endLoc = requestDto.getEndLatitude() + "," + requestDto.getEndLongitude();
-
-            Ride newRide = Ride.builder()
-                    .rider(rider)
-                    .driver(driver)
-                    .startLocation(startLoc)
-                    .endLocation(endLoc)
-                    .basePrice(BigDecimal.valueOf(basePriceDouble))
-                    .surgeMultiplier(BigDecimal.valueOf(liveMultiplier))
-                    .endPrice(BigDecimal.valueOf(endPriceDouble))
-                    .status(RideStatus.ACCEPTED)
-                    .build();
-            rideRepository.save(newRide);
-            boolean isAcquired = rlock.tryLock(0,10, TimeUnit.SECONDS);
-
-            if(!isAcquired){
-                return "Araç başka bir yolcuyla eşleşti lütfen tekrar deneyiniz";
-            }
-            stringRedisTemplate.opsForGeo().remove("driver_locations" , selectedDriverId);
-            return "Tebrikler! Sürücü : "+selectedDriverId+"sizinle eşleşti.Araç yola çıktı";
-        }catch (InterruptedException exception){
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Sistem kesintiye uğradı");
-        }finally {
-            if(rlock.isHeldByCurrentThread()){
-                rlock.unlock();
-            }
+        return "Talebiniz alındı, en uygun araç arka planda aranıyor. Lütfen bekleyin...";
         }
 
     }
 
-}
+
