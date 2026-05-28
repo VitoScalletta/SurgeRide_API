@@ -13,6 +13,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -28,7 +29,7 @@ public class RideRequestConsumer {
     private final StringRedisTemplate stringRedisTemplate;
     private final UserRepository userRepository;
     private final RideRepository rideRepository;
-
+    private final SimpMessagingTemplate simpMessagingTemplate;
     @RabbitListener(queues = RabbitMQConfig.QUEUE_NAME)
     public void processRideRequest(RideRequestDto  rideRequestDto) {
         List<String> nearbyDrivers = driverLocationService.getNearbyDrivers(
@@ -74,6 +75,9 @@ public class RideRequestConsumer {
             }
             stringRedisTemplate.opsForGeo().remove("driver_locations", selectedDriverId);
             log.info("Tebrikler! Sürücü : {} yolcu : {} ile eşleşti Araç yola çıktı",selectedDriverId,rideRequestDto.getRiderId());
+            String channel = "/topic/ride-updates/"+rideRequestDto.getRiderId();
+            String message = "Aracınız yola çıktı Sürücü ID: "+ selectedDriverId;
+            simpMessagingTemplate.convertAndSend(channel, message);
         }catch (Exception exception){
             Thread.currentThread().interrupt();
             log.error("Kuyruktaki mesaj işlenirken KRİTİK HATA oluştu. Mesaj çöpe atılıyor. Hata: {}", exception.getMessage(), exception);

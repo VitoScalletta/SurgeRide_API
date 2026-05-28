@@ -3,6 +3,7 @@ package com.microcommerce.surgeride_api.ride.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -14,6 +15,7 @@ import java.util.Set;
 public class SurgePricingService {
     private final StringRedisTemplate stringRedisTemplate;
     private final SurgeZoneService surgeZoneService;
+    private final SimpMessagingTemplate simpMessagingTemplate;
 
     public void recordDemand(Long riderId,double latitude,double longitude) {
         String zoneId = surgeZoneService.getZoneId(latitude,longitude);
@@ -91,6 +93,8 @@ public class SurgePricingService {
             stringRedisTemplate.opsForValue().set(multiplierKey,String.valueOf(multiplier));
 
             log.info("Bölge {} için dinamik fiyat çarpanı güncellendi: {}x",zoneId,multiplier);
+            String surgeMessage = "Bölge : "+zoneId+"| Yeni Çarpan : "+ multiplier+"x";
+            simpMessagingTemplate.convertAndSend("/topic/surge-updates",surgeMessage);
         }
     }
 
