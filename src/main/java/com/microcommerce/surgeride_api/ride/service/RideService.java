@@ -23,6 +23,7 @@ public class RideService {
     private final SurgeZoneService surgeZoneService;
     private final StringRedisTemplate stringRedisTemplate;
     private final RabbitTemplate rabbitTemplate;
+    private final RideRepository rideRepository;
 
     public String requestRide(RideRequestDto requestDto){
         String zoneId = surgeZoneService.getZoneId(requestDto.getStartLatitude(), requestDto.getStartLongitude());
@@ -46,7 +47,17 @@ public class RideService {
 
         return "Talebiniz alındı, en uygun araç arka planda aranıyor. Lütfen bekleyin...";
         }
+    public String completeRide(Long rideId){
+       Ride ride = rideRepository.findById(Math.toIntExact(rideId))
+               .orElseThrow(() -> new RuntimeException("Yolculuk bulunamadı"));
 
+       if (ride.getStatus() != RideStatus.ACCEPTED){
+           throw new RuntimeException("Geçersiz işlem! Devam eden yolculuklar tamamlanabilir mevcut durum : "+ride.getStatus());
+       }
+       ride.setStatus(RideStatus.COMPLETED);
+       rideRepository.save(ride);
+       return "Yolculuk tamamlandı Fatura : "+ride.getEndPrice()+"Tl";
     }
+}
 
 

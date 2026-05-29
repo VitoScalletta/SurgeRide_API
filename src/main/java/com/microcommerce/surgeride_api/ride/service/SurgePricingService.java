@@ -75,6 +75,9 @@ public class SurgePricingService {
         else if (ratio < 5){
             return 1.5;
         }
+        else if (ratio >= 100){
+            return 5.0;
+        }
         else{
             return 2.0;
         }

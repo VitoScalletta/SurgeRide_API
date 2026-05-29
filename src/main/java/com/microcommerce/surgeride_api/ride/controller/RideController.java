@@ -5,6 +5,7 @@ import com.microcommerce.surgeride_api.ride.entity.Ride;
 import com.microcommerce.surgeride_api.ride.service.RideService;
 import com.microcommerce.surgeride_api.ride.service.SurgePricingService;
 import jakarta.persistence.Entity;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,8 +28,13 @@ public class RideController {
     }
 
     @PostMapping("/request")
-    public ResponseEntity<String> requestRide(@RequestBody RideRequestDto requestDto){
+    public ResponseEntity<String> requestRide(@Valid @RequestBody RideRequestDto requestDto){
         String responseMessage = rideService.requestRide(requestDto);
         return ResponseEntity.ok(responseMessage);
+    }
+    @PostMapping("/complete/{rideId}")
+    public ResponseEntity<String> completeRide(@PathVariable Long rideId){
+        String response = rideService.completeRide(rideId);
+        return ResponseEntity.ok(response);
     }
 }
