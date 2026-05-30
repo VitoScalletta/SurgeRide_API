@@ -1,151 +1,84 @@
-# 🚗 SurgeRide API
+# 🚖 SurgeRide API - Real-Time Ride-Hailing Backend
 
-> Spring Boot, Redis ve RabbitMQ ile geliştirilmiş; **anlık konum takibi** ve **dinamik fiyatlandırma (Surge Pricing)** yapabilen, ölçeklenebilir bir araç çağırma (Ride-Hailing) API mimarisi.
+> Uber ve Getir gibi modern sistemlerin arka planında çalışan anlık konum takibi, asenkron eşleştirme ve dinamik fiyatlandırma (Surge Pricing) mimarisinin Spring Boot ile geliştirilmiş, ölçeklenebilir backend klonu.
 
----
+![Java](https://img.shields.io/badge/Java-17-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-brightgreen) ![Redis](https://img.shields.io/badge/Redis-GeoSpatial-red) ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Async-FF6600) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
 
-## 📋 İçindekiler
+## 🏗️ Sistem Mimarisi (Architecture)
 
-- [Proje Hakkında](#proje-hakkında)
-- [Teknoloji Yığını](#teknoloji-yığını)
-- [Özellikler](#özellikler)
-- [Mimari](#mimari)
-- [Kurulum](#kurulum)
-- [API Dokümantasyonu](#api-dokümantasyonu)
-- [İzleme & Metrikler](#i̇zleme--metrikler)
+GitHub bu şemayı otomatik olarak görselleştirecektir. Projenin asenkron çalışma mantığı şu şekildedir:
 
----
+```mermaid
+graph TD
+    A[Yolcu (Rider)] -->|1. Araç Çağırır (HTTP POST)| B(Ride Controller)
+    B -->|2. Yetki Kontrolü| C{JWT Filter}
+    C -->|Başarılı| D[RabbitMQ Exchange]
+    D -->|3. Kuyruğa Atar| E[(Ride Requests Queue)]
+    E -->|4. Asenkron Tüketim| F[Ride Request Consumer]
+    F -->|5. Konum ve Arz/Talep Sorgusu| G[(Redis Geo / ZSet)]
+    F -->|6. Redisson Distributed Lock| H[Eşleştirme Motoru]
+    H -->|7. Kayıt| I[(PostgreSQL)]
+    H -->|8. Canlı Bildirim| J[WebSocket / STOMP]
+    J --> K[Kullanıcı Ekranı]
 
-## Proje Hakkında
+🚀 Öne Çıkan Özellikler ve Mühendislik Çözümleri
 
-SurgeRide API, Uber/Bolt gibi araç çağırma servislerinin arka plan altyapısını simüle eden, üretim kalitesinde tasarlanmış bir backend projesidir. Sistem; gerçek zamanlı sürücü konum güncellemelerini, talep yoğunluğuna göre dinamik fiyat hesaplamayı (surge pricing) ve asenkron bildirim akışlarını yönetebilecek şekilde kurgulanmıştır.
+    Dinamik Fiyatlandırma (Surge Pricing): Redis ZSet kullanılarak belirli bir bölgedeki (GeoHash ile filtrelenmiş) son 5 dakikadaki arz ve talep oranları hesaplanır. Eğer talep arzı geçerse, fiyat çarpanı (Multiplier) otomatik olarak artar.
 
----
+    Asenkron Eşleştirme (RabbitMQ): Kullanıcı araç çağırdığında API kilitlenmez. İstek bir mesaj kuyruğuna (RabbitMQ) atılır, arka plandaki Consumer (Tüketici) boşta olan şoförleri bularak eşleştirmeyi gerçekleştirir.
 
-## Teknoloji Yığını
+    Dağıtık Kilit Yönetimi (Redisson): Aynı anda iki farklı yolcunun tek bir şoförle eşleşmesini (Race Condition) engellemek için Redisson ile sürücü kilitlenir (Distributed Lock).
 
-| Katman | Teknoloji |
-|---|---|
-| Backend Framework | Java 17, Spring Boot 3.2.6 |
-| Veritabanı | PostgreSQL 16 |
-| Cache & Konum Takibi | Redis 7 + Redisson |
-| Mesaj Kuyruğu | RabbitMQ 3 |
-| Gerçek Zamanlı İletişim | WebSocket (STOMP) |
-| Güvenlik | Spring Security + JWT (JJWT 0.11.5) |
-| Coğrafi İndeksleme | GeoHash (ch.hsr) |
-| İzleme | Prometheus + Grafana + Spring Actuator |
-| API Dokümantasyonu | SpringDoc OpenAPI (Swagger UI) |
-| Containerization | Docker Compose |
+    Anlık Konum Takibi: Sürücü konumları geleneksel veritabanları yerine milisaniyelik tepki süresi sunan Redis GeoSpatial veri tipinde tutulur.
 
----
+    Güvenlik (Spring Security & JWT): Sistem Stateless mimaride tasarlanmış olup, tüm uç noktalar özel yazılmış bir JWT Filter (OncePerRequestFilter) ile korunmaktadır.
 
-## Özellikler
+🛠️ Kullanılan Teknolojiler (Tech Stack)
 
-- 🔐 **JWT tabanlı kimlik doğrulama** — Kayıt, giriş ve token yenileme
-- 📍 **Gerçek zamanlı konum takibi** — GeoHash algoritması ile sürücü konumlarının Redis'te saklanması ve yakın sürücülerin bulunması
-- 💰 **Surge Pricing motoru** — Bölgedeki anlık talep/arz oranına göre dinamik fiyat katsayısı hesaplama
-- 📡 **WebSocket bildirimleri** — Yolcu ve sürücüye anlık durum güncellemeleri
-- 📨 **Asenkron mesajlaşma** — RabbitMQ ile bağımsız servis iletişimi (yolculuk talepleri, bildirimler)
-- 🔒 **Distributed Lock** — Redisson ile eşzamanlı surge pricing hesaplamalarında yarış koşullarının önlenmesi
-- 📊 **Gözlemlenebilirlik** — Prometheus metrikleri ve Grafana dashboard'u
+    Backend: Java 17, Spring Boot 3.2.6, Spring Security, Hibernate (JPA)
 
----
+    Message Broker: RabbitMQ
 
-## Mimari
+    In-Memory & Cache: Redis, Redisson (Distributed Lock)
 
-```
-┌─────────────┐     REST/WS      ┌──────────────────────────┐
-│   İstemci   │ ◄──────────────► │   Spring Boot API        │
-└─────────────┘                  │                          │
-                                 │  ┌──────────────────┐    │
-                                 │  │  Security (JWT)  │    │
-                                 │  └──────────────────┘    │
-                                 │  ┌──────────────────┐    │
-                                 │  │  Surge Pricing   │    │
-                                 │  │     Engine       │    │
-                                 │  └──────────────────┘    │
-                                 │  ┌──────────────────┐    │
-                                 │  │  Location Service│    │
-                                 │  │  (GeoHash)       │    │
-                                 │  └──────────────────┘    │
-                                 └────────┬─────────────────┘
-                                          │
-              ┌───────────────────────────┼──────────────────┐
-              ▼                           ▼                  ▼
-       ┌─────────────┐           ┌──────────────┐   ┌──────────────┐
-       │  PostgreSQL │           │    Redis      │   │  RabbitMQ   │
-       │  (Kalıcı DB)│           │ (Cache+Konum) │   │  (Mesajlar) │
-       └─────────────┘           └──────────────┘   └──────────────┘
-```
+    Veritabanı: PostgreSQL
 
----
+    Canlı İletişim: WebSockets (STOMP)
 
-## Kurulum
+    Monitoring: Prometheus, Grafana, Spring Boot Actuator
 
-### Ön Gereksinimler
+    Dokümantasyon: OpenAPI (Swagger 3)
 
-- Java 17+
-- Docker & Docker Compose
-- Maven
+    Altyapı: Docker & Docker Compose
 
-### 1. Repoyu Klonla
+⚙️ Kurulum ve Çalıştırma
 
-```bash
-git clone https://github.com/VitoScalletta/SurgeRide_API.git
-cd SurgeRide_API
-```
+Projeyi kendi bilgisayarınızda ayağa kaldırmak için aşağıdaki adımları izleyin:
 
-### 2. Altyapıyı Başlat (Docker)
+1. Gereksinimleri Ayağa Kaldırın (Docker):
+Veritabanı, Redis, RabbitMQ ve Monitoring araçlarını tek tuşla başlatmak için:
+Bash
 
-```bash
 docker-compose up -d
-```
 
-Bu komut aşağıdaki servisleri ayağa kaldırır:
+2. Projeyi Derleyin ve Çalıştırın:
+Bash
 
-| Servis | Port |
-|---|---|
-| PostgreSQL | 5432 |
-| Redis | 6379 |
-| RabbitMQ | 5672 / 15672 (yönetim paneli) |
-| Prometheus | 9090 |
-| Grafana | 3000 |
-
-### 3. Uygulamayı Çalıştır
-
-```bash
+./mvnw clean install
 ./mvnw spring-boot:run
-```
 
-Uygulama varsayılan olarak `http://localhost:8080` adresinde çalışır.
-
----
-
-## API Dokümantasyonu
-
-Uygulama çalışırken Swagger UI'a aşağıdaki adresten erişebilirsiniz:
-
-```
+3. API Dokümantasyonuna (Swagger) Erişin:
+Proje çalıştıktan sonra tarayıcınızdan aşağıdaki adrese giderek tüm API uç noktalarını test edebilirsiniz:
 http://localhost:8080/swagger-ui/index.html
-```
+🔒 Güvenlik & Test
 
----
+Sistemi test etmek için önce POST /api/auth/register ucundan bir kullanıcı oluşturmalı, ardından POST /api/auth/login ucundan aldığınız JWT Token'ı Swagger'daki "Authorize" butonuna (veya isteklerinizin Header'ına Bearer <token> formatında) eklemelisiniz.
 
-## İzleme & Metrikler
 
-| Araç | Adres | Kimlik Bilgisi |
-|---|---|---|
-| RabbitMQ Yönetim | http://localhost:15672 | guest / guest |
-| Prometheus | http://localhost:9090 | — |
-| Grafana | http://localhost:3000 | admin / admin |
+***
 
-Spring Actuator metrikleri:
-```
-http://localhost:8080/actuator/prometheus
-```
+### 🎯 Tech Lead Dokunuşu
 
----
+Bu README dosyasını projene ekleyip GitHub'a pushladıktan sonra projenin ana sayfasına girip bir bak. O hiyerarşik yapı, teknoloji logoları ve **Mermaid Mimari Çizimi** sayesinde projen resmen bir sanat eserine dönüşecek. (Eğer Mermaid şeması anında gözükmezse sayfayı yenile, GitHub onu algılayıp harika bir tabloya dönüştürecek).
 
-## Lisans
-
-Bu proje eğitim amaçlı geliştirilmiştir.
+Hazır olduğunda GitHub reposuna girip README'nin nasıl göründüğüne bak. Gözlerini yaşartacağına eminim! Nasıl, bu işi de hallettik mi? 😎
