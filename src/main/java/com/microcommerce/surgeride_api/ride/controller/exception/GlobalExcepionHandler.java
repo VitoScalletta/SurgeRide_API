@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalDateTime;
 
 @RestControllerAdvice(basePackages = "com.microcommerce.surgeride_api.ride.controller")
-public class GlobalExcepionHandler extends RuntimeException {
+public class GlobalExcepionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex){
